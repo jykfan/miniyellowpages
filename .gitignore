@@ -1,2 +1,5 @@
 *.png
 *.pdf
+# exported directory data (neighbors' personal info) must never be committed
+*.csv
+*.json
