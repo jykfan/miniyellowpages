@@ -223,23 +223,57 @@ const GUIDES = [
   },
 ];
 
+/* Made-up neighbors for trying the app ("Load sample neighbors"). Each household lists its people. */
+const sampleAdult = (first, last, phone, occupation, skills = [], extra = {}) => ({ kind: "adult", first, last, phone, occupation, skills, ...extra });
+const sampleChild = (first, age, needs = "") => ({ kind: "child", first, age, needs });
 const SAMPLE_HOUSEHOLDS = [
-  ["Maria & Tom Alvarez", "112 Oak St", "555-0101", "maria.a@example.com", "ER nurse; contractor", ["Nurse", "CPR / First aid", "Carpenter / Handyperson", "Spanish"], ["Generator", "Ladder"], ""],
-  ["Dev Patel", "118 Oak St", "555-0102", "", "Software engineer", ["IT / Networking", "Ham radio operator"], ["Two-way radios", "Solar charger / power bank"], ""],
-  ["The Nguyen family", "124 Oak St", "555-0103", "nguyenfam@example.com", "Restaurant owner", ["Cooking for groups", "Vietnamese"], ["Camp stove", "Stored water"], "Infant at home"],
-  ["Ruth Goldberg", "130 Oak St", "555-0104", "", "Retired teacher", ["Childcare"], [], "Lives alone; uses a walker"],
-  ["Sam & Jordan Lee", "136 Oak St", "555-0105", "leehouse@example.com", "Electrician; vet tech", ["Electrician", "Veterinary"], ["Truck / trailer", "Shut-off wrench"], ""],
-  ["Aisha Bello", "142 Oak St", "555-0106", "", "Paramedic", ["EMT / Paramedic", "CERT trained"], ["Extra first-aid kit", "AED"], ""],
-  ["Chris Ward", "15 Elm Ave", "555-0107", "", "Arborist", ["Tree work / Chainsaw"], ["Chainsaw", "Ladder"], ""],
-  ["Linda & Paul Okafor", "21 Elm Ave", "555-0108", "okafors@example.com", "Physician; accountant", ["Doctor"], ["Generator"], "Paul uses oxygen (needs power)"],
-  ["Hannah Kim", "27 Elm Ave", "555-0109", "", "Social worker", ["Mental health", "Elder care"], [], ""],
-  ["Jamal Carter", "33 Elm Ave", "555-0110", "", "Plumber", ["Plumber", "Gas / HVAC"], ["Shut-off wrench", "Tent / tarps"], ""],
-  ["The Russo family", "39 Elm Ave", "555-0111", "", "Firefighter", ["Firefighter", "Search & rescue"], ["Fire extinguisher", "Pool / large water source"], "", "2 dogs"],
-  ["Mei Chen", "45 Elm Ave", "555-0112", "", "Pharmacist", ["Mandarin", "Cantonese"], [], ""],
-];
-
-/* [adults, children, ages & details] for each sample household above, in order */
-const SAMPLE_MEMBERS = [
-  [2, 2, "ages 6 and 9"], [1, 0], [2, 1, "infant, 8 months"], [1, 0], [2, 0], [1, 1, "age 12"],
-  [1, 0], [2, 0, "Paul is 78"], [1, 0], [2, 3, "ages 3, 5, 10"], [2, 2, "teens"], [3, 0, "parents (70s) live with Mei"],
+  { names: "Maria & Tom Alvarez", address: "112 Oak St", resources: ["Generator", "Ladder"], pets: "1 dog", people: [
+    sampleAdult("Maria", "Alvarez", "555-0101", "ER nurse", ["Nurse", "CPR / First aid", "Spanish"], { email: "maria.a@example.com" }),
+    sampleAdult("Tom", "Alvarez", "555-0119", "Contractor", ["Carpenter / Handyperson"]),
+    sampleChild("Sofia", 6), sampleChild("Leo", 9, "Severe peanut allergy (EpiPen in kitchen)"),
+  ] },
+  { names: "Dev Patel", address: "118 Oak St", resources: ["Two-way radios", "Solar charger / power bank"], people: [
+    sampleAdult("Dev", "Patel", "555-0102", "Software engineer", ["IT / Networking", "Ham radio operator"]),
+  ] },
+  { names: "The Nguyen family", address: "124 Oak St", resources: ["Camp stove", "Stored water"], people: [
+    sampleAdult("Linh", "Nguyen", "555-0103", "Restaurant owner", ["Cooking for groups", "Vietnamese"], { email: "nguyenfam@example.com" }),
+    sampleAdult("Bao", "Nguyen", "555-0113", "Chef", ["Cooking for groups"]),
+    sampleChild("", 0, "Infant (8 months)"),
+  ] },
+  { names: "Ruth Goldberg", address: "130 Oak St", people: [
+    sampleAdult("Ruth", "Goldberg", "555-0104", "Retired teacher", ["Childcare"], { needs: "Lives alone; uses a walker" }),
+  ] },
+  { names: "Sam & Jordan Lee", address: "136 Oak St", resources: ["Truck / trailer", "Shut-off wrench"], people: [
+    sampleAdult("Sam", "Lee", "555-0105", "Electrician", ["Electrician"], { email: "leehouse@example.com" }),
+    sampleAdult("Jordan", "Lee", "555-0115", "Vet tech", ["Veterinary"]),
+  ] },
+  { names: "Aisha Bello", address: "142 Oak St", resources: ["Extra first-aid kit", "AED"], people: [
+    sampleAdult("Aisha", "Bello", "555-0106", "Paramedic", ["EMT / Paramedic", "CERT trained"]),
+    sampleChild("Zara", 12),
+  ] },
+  { names: "Chris Ward", address: "15 Elm Ave", resources: ["Chainsaw", "Ladder"], people: [
+    sampleAdult("Chris", "Ward", "555-0107", "Arborist", ["Tree work / Chainsaw"]),
+  ] },
+  { names: "Linda & Paul Okafor", address: "21 Elm Ave", resources: ["Generator"], people: [
+    sampleAdult("Linda", "Okafor", "555-0108", "Physician", ["Doctor"], { email: "okafors@example.com" }),
+    sampleAdult("Paul", "Okafor", "", "Accountant", [], { needs: "Uses oxygen (needs power)" }),
+  ] },
+  { names: "Hannah Kim", address: "27 Elm Ave", people: [
+    sampleAdult("Hannah", "Kim", "555-0109", "Social worker", ["Mental health", "Elder care"]),
+  ] },
+  { names: "Jamal & Keisha Carter", address: "33 Elm Ave", resources: ["Shut-off wrench", "Tent / tarps"], people: [
+    sampleAdult("Jamal", "Carter", "555-0110", "Plumber", ["Plumber", "Gas / HVAC"]),
+    sampleAdult("Keisha", "Carter", "555-0120", "Teacher", ["Childcare"]),
+    sampleChild("", 3), sampleChild("", 5), sampleChild("", 10),
+  ] },
+  { names: "The Russo family", address: "39 Elm Ave", resources: ["Fire extinguisher", "Pool / large water source"], pets: "2 dogs", people: [
+    sampleAdult("Marco", "Russo", "555-0111", "Firefighter", ["Firefighter", "Search & rescue"]),
+    sampleAdult("Gina", "Russo", "555-0121", "Dental hygienist"),
+    sampleChild("", 14), sampleChild("", 16),
+  ] },
+  { names: "Mei Chen", address: "45 Elm Ave", household: "Mei's parents live with her", people: [
+    sampleAdult("Mei", "Chen", "555-0112", "Pharmacist", ["Mandarin", "Cantonese"]),
+    sampleAdult("Wei", "Chen", "", "Retired", [], { needs: "Speaks Cantonese only" }),
+    sampleAdult("Lan", "Chen", "", "Retired", [], { needs: "Uses a wheelchair" }),
+  ] },
 ];

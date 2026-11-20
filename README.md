@@ -4,8 +4,8 @@ A neighborhood directory and emergency-preparedness organizer. Collect your neig
 
 ## What it does
 
-- **Directory**: Add households: names, address, phones, email, occupation, emergency **skills** (nurse, electrician, ham radio, languages…), shareable **equipment** (generator, chainsaw, AED…), and "check-on-me" info: **household members** (number of adults and children, plus ages and details), special needs, and pets. Search and filter by skill ("who has a generator?").
-- **Consent tracking**: Each household records whether it agreed to be listed, when, and by whom, plus which fields it's OK to print. Households without consent never appear in the booklet or pods. Organizer notes are never printed.
+- **Directory**: Each household has an address, a listing name, and a list of **people**, entered one at a time like passengers on a ticket booking. **Adults** have their own name, phone, email, occupation, emergency **skills** (nurse, electrician, ham radio, languages…) and special needs. **Children** have an optional first name, an optional age, and special needs or allergies. Shared **equipment** (generator, chainsaw, AED…), pets and other details belong to the household. Search and filter by skill ("who has a generator?").
+- **Consent tracking**: One adult consents for the household, recording whether it agreed to be listed, when, by whom, and which details it's OK to print. **Children's names are never printed unless the household opts in**; otherwise children appear as "2 children (ages 6, 9)". Households without consent never appear in the booklet or pods. Organizer notes are never printed. Ages print as given, so the booklet's date shows when they were collected. Neighbors fill out a new form each year.
 - **Pods**: Auto-assign consenting households into pods of up to 5 (configurable) by street and house number, so pod members are next-door neighbors. Each pod shows a headcount (people and children) so members know who to account for. You can rename pods, pick a captain, and move households by hand.
 - **Prepare**: Guides for shutting off gas, water, and electricity; generators; earthquakes; wildfire evacuation; household plans; and the pod check-in protocol. Also an interactive go-bag checklist and important phone numbers.
 - **Print**: A print-ready booklet (letter size) you can configure. It has a cover with important numbers, a directory grouped by street, a skills and resources index, pod check-off sheets, the guides, the go-bag checklist, OK/HELP window signs, and **blank sign-up and consent forms** to take door to door.
@@ -27,7 +27,7 @@ It's a static site with no build step and no dependencies:
 ## Suggested workflow
 
 1. **Settings**: Enter your neighborhood name, organizer contact, meeting point, and local utility numbers.
-2. **Directory → Print sign-up forms**: Set how many copies you need, print, and drop one at each door. Each form is a single page, laid out in the same order as the Add household screen, with a consent section and an "Entered" checkbox to track data entry.
+2. **Directory → Print sign-up forms**: Set how many copies you need, print, and drop one at each door. Each form is a single page, laid out in the same order as the Add household screen. It has a "Who lives here" table with one row per person, and people write their initials next to each skill they have, with a consent section and an "Entered" checkbox to track data entry.
 3. **Directory → + Add household**: Enter each form and tick the consent box.
 4. **Pods → Auto-assign by address**: Then adjust and pick captains.
 5. **Print**: Print the booklet (double-sided, "headers and footers" off) and hand it out.

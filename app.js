@@ -12,9 +12,11 @@
     ["occupation", "Occupation"],
     ["skills", "Skills"],
     ["resources", "Equipment & resources"],
-    ["members", "Household members (adults & children)"],
+    ["members", "Children's number & ages"],
     ["needs", "Special needs & pets (shared with pod & responders)"],
+    ["childNames", "Children's names (off unless they ask)"],
   ];
+  const SHARE_DEFAULT_OFF = ["childNames"]; // printed only if the household opts in
 
   // ---------- utilities ----------
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -46,29 +48,123 @@
     try { localStorage.setItem(key, val); return true; } catch { return false; }
   }
 
-  // ---------- household members ----------
+  // ---------- people ----------
+  // A household holds a list of people. Adults: name, contact, work, skills, needs.
+  // Children: optional first name, optional age, needs.
   function toCount(v) {
     if (v === null || v === undefined || String(v).trim() === "") return null;
     const n = parseInt(v, 10);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
-  // e.g. "2 adults, 2 children (ages 4, 7)"
-  function membersText(h) {
-    const parts = [];
-    if (h.adults != null) parts.push(`${h.adults} adult${h.adults === 1 ? "" : "s"}`);
-    if (h.children != null) parts.push(`${h.children} ${h.children === 1 ? "child" : "children"}`);
-    const counts = parts.join(", ");
-    if (!h.household) return counts;
-    return counts ? `${counts} (${h.household})` : h.household;
+  const listOf = (v) => (Array.isArray(v) ? v : String(v || "").split(/[;,]/)).map((x) => String(x).trim()).filter(Boolean);
+
+  function normalizePerson(p = {}) {
+    const str = (v) => String(v ?? "").trim();
+    const child = p.kind === "child";
+    return {
+      kind: child ? "child" : "adult",
+      first: str(p.first),
+      last: child ? "" : str(p.last),
+      age: child ? toCount(p.age) : null,
+      phone: child ? "" : str(p.phone),
+      email: child ? "" : str(p.email),
+      occupation: child ? "" : str(p.occupation),
+      skills: child ? [] : uniq(listOf(p.skills)),
+      needs: str(p.needs),
+    };
   }
-  // Headcount for a group of households; "at least" when some counts are missing
+
+  // Fields households had before people were tracked one by one
+  const LEGACY_PERSON_FIELDS = ["phone", "phone2", "email", "occupation", "skills", "needs", "adults", "children"];
+  // Turn an older household's combined fields into people
+  function peopleFromLegacy(h) {
+    const adults = toCount(h.adults), children = toCount(h.children);
+    const skills = listOf(h.skills);
+    const hasDetails = h.phone || h.phone2 || h.email || h.occupation || skills.length || h.needs;
+    const people = [];
+    if (hasDetails || adults) {
+      // Use the listing name as the person's name only when it looks like one person ("Ruth Goldberg")
+      const nm = String(h.names || "").trim();
+      const single = (adults ?? 1) <= 1 && nm && !/&|\band\b|family|^the\s/i.test(nm);
+      const [first, ...rest] = single ? nm.split(/\s+/) : [""];
+      people.push(normalizePerson({
+        kind: "adult", first, last: rest.join(" "),
+        phone: [h.phone, h.phone2].filter(Boolean).join(" / "), email: h.email, occupation: h.occupation, skills, needs: h.needs,
+      }));
+    }
+    while (people.length < (adults || 0)) people.push(normalizePerson({ kind: "adult" }));
+    for (let i = 0; i < (children || 0); i++) people.push(normalizePerson({ kind: "child" }));
+    return people;
+  }
+
+  const adultsOf = (h) => h.people.filter((p) => p.kind === "adult");
+  const childrenOf = (h) => h.people.filter((p) => p.kind === "child");
+  const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const firstPhone = (h) => adultsOf(h).map((p) => p.phone).find(Boolean) || "";
+  const hasNeeds = (h) => h.people.some((p) => p.needs);
+
+  // A person's name as shown inside their household's listing ("Maria", or "Wei Chen" if the surname differs)
+  function personName(p, h) {
+    if (!p.first) return p.kind === "child" ? "Child" : "Adult";
+    const showLast = p.last && !String(h?.names || "").toLowerCase().includes(p.last.toLowerCase());
+    return showLast ? `${p.first} ${p.last}` : p.first;
+  }
+  function childLabel(k) {
+    const age = k.age != null ? ` (${k.age})` : "";
+    return k.first ? `${k.first}${age}` : `child${age}`;
+  }
+  // "Children: Sofia (6), Leo (9)" when names are known, otherwise "2 children (ages 6, 9)"
+  function childrenText(h) {
+    const kids = childrenOf(h);
+    if (!kids.length) return "";
+    if (kids.some((k) => k.first)) return `Children: ${kids.map(childLabel).join(", ")}`;
+    const ages = kids.map((k) => k.age).filter((a) => a != null);
+    let detail = "";
+    if (ages.length === kids.length) detail = ` (age${ages.length === 1 ? "" : "s"} ${ages.join(", ")})`;
+    else if (ages.length) detail = ` (${ages.length === 1 ? "one" : ages.length} aged ${ages.join(", ")})`;
+    return plural(kids.length, "child", "children") + detail;
+  }
+  // "4 people (2 adults, 2 children)"
+  function peopleCountText(h) {
+    const a = adultsOf(h).length, c = childrenOf(h).length;
+    if (!a && !c) return "";
+    return plural(a + c, "person", "people") + (c ? ` (${plural(a, "adult", "adults")}, ${plural(c, "child", "children")})` : "");
+  }
+  // Who to account for at a check-in: "Maria, Tom · 2 children (ages 6, 9)"
+  function membersLine(h) {
+    const adults = adultsOf(h);
+    const named = adults.filter((p) => p.first).map((p) => personName(p, h));
+    const unnamed = adults.length - named.length;
+    const who = [named.join(", "), unnamed ? plural(unnamed, "adult", "adults") : ""].filter(Boolean).join(" + ");
+    let line = [who, childrenText(h)].filter(Boolean).join(" · ");
+    if (h.household) line += line ? ` (${h.household})` : h.household;
+    return line;
+  }
+  // Special needs, labeled by person: "Leo (9): severe peanut allergy" (no label in one-person households)
+  function needsList(h) {
+    return h.people.filter((p) => p.needs).map((p) => {
+      if (h.people.length === 1) return p.needs;
+      const who = p.kind === "child" ? childLabel(p).replace(/^child/, "Child") : personName(p, h);
+      return `${who}: ${p.needs}`;
+    });
+  }
+  // Listing name suggested from the adults: "Maria & Tom Alvarez", or "Mei Chen & Wei Lin"
+  function suggestListing(people) {
+    const adults = people.filter((p) => p.kind === "adult" && p.first);
+    if (!adults.length) return "";
+    const lasts = uniq(adults.map((p) => p.last).filter(Boolean));
+    const joinNames = (xs) => (xs.length > 2 ? `${xs.slice(0, -1).join(", ")} & ${xs[xs.length - 1]}` : xs.join(" & "));
+    if (lasts.length <= 1) return [joinNames(adults.map((p) => p.first)), lasts[0]].filter(Boolean).join(" ");
+    return joinNames(adults.map((p) => [p.first, p.last].filter(Boolean).join(" ")));
+  }
+  // Headcount for a group of households; "at least" when some households haven't listed everyone
   function headcount(list) {
-    const known = list.filter((h) => h.adults != null || h.children != null);
+    const known = list.filter((h) => h.people.length);
     if (!known.length) return "";
-    const people = known.reduce((n, h) => n + (h.adults || 0) + (h.children || 0), 0);
-    const kids = known.reduce((n, h) => n + (h.children || 0), 0);
-    const atLeast = known.length < list.length ? "at least " : "";
-    return `${atLeast}${people} ${people === 1 ? "person" : "people"}${kids ? `, ${kids} ${kids === 1 ? "child" : "children"}` : ""}`;
+    const total = known.reduce((n, h) => n + h.people.length, 0);
+    const kids = known.reduce((n, h) => n + childrenOf(h).length, 0);
+    const atLeast = known.length < list.length || list.some((h) => h._kidsHidden) ? "at least " : "";
+    return `${atLeast}${plural(total, "person", "people")}${kids ? `, ${plural(kids, "child", "children")}` : ""}`;
   }
 
   // ---------- state ----------
@@ -89,22 +185,15 @@
   }
 
   function normalizeHousehold(h) {
-    const share = Object.fromEntries(SHARE_FIELDS.map(([k]) => [k, true]));
+    const share = Object.fromEntries(SHARE_FIELDS.map(([k]) => [k, !SHARE_DEFAULT_OFF.includes(k)]));
     return {
       id: h.id || uid(),
-      names: h.names || "",
+      names: h.names || "", // listing name, e.g. "Maria & Tom Alvarez"
       address: h.address || "",
       unit: h.unit || "",
-      phone: h.phone || "",
-      phone2: h.phone2 || "",
-      email: h.email || "",
-      household: h.household || "", // ages / other details about who lives there
-      adults: toCount(h.adults),
-      children: toCount(h.children),
-      occupation: h.occupation || "",
-      skills: Array.isArray(h.skills) ? h.skills : splitList(h.skills),
-      resources: Array.isArray(h.resources) ? h.resources : splitList(h.resources),
-      needs: h.needs || "",
+      people: Array.isArray(h.people) ? h.people.map(normalizePerson) : peopleFromLegacy(h),
+      household: h.household || "", // other details about the household
+      resources: listOf(h.resources),
       pets: h.pets || "",
       notes: h.notes || "",
       consent: {
@@ -183,7 +272,7 @@
 
   function renderDirectory() {
     const hs = state.households;
-    const allSkills = uniq(hs.flatMap((h) => [...h.skills, ...h.resources])).sort();
+    const allSkills = uniq(hs.flatMap((h) => [...h.people.flatMap((p) => p.skills), ...h.resources])).sort();
     if (dirUI.skill && !allSkills.includes(dirUI.skill)) dirUI.skill = "";
     const consented = hs.filter((h) => h.consent.given).length;
 
@@ -248,44 +337,48 @@
   function matches(h) {
     if (dirUI.show === "yes" && !h.consent.given) return false;
     if (dirUI.show === "no" && h.consent.given) return false;
-    if (dirUI.skill && !h.skills.includes(dirUI.skill) && !h.resources.includes(dirUI.skill)) return false;
+    if (dirUI.skill && !h.people.some((p) => p.skills.includes(dirUI.skill)) && !h.resources.includes(dirUI.skill)) return false;
     const q = dirUI.q.trim().toLowerCase();
     if (!q) return true;
-    return [h.names, h.address, h.unit, h.occupation, h.phone, h.email, ...h.skills, ...h.resources]
+    return [h.names, h.address, h.unit, h.household, h.pets, ...h.resources,
+      ...h.people.flatMap((p) => [p.first, p.last, p.phone, p.email, p.occupation, p.needs, ...p.skills])]
       .join(" ").toLowerCase().includes(q);
   }
 
   function drawCards() {
     const list = state.households.filter(matches).sort(dirUI.sort === "name" ? byName : byAddress);
     const podName = (id) => state.pods.find((p) => p.id === id)?.name;
-    $("#cards").innerHTML = list.length ? list.map((h) => `
+    const tags = (xs, cls = "") => xs.map((x) => `<span class="tag ${cls}">${esc(x)}</span>`).join("");
+    $("#cards").innerHTML = list.length ? list.map((h) => {
+      const kids = childrenOf(h);
+      return `
       <article class="card ${h.consent.given ? "" : "pending"}">
         <header>
           <div>
             <h3>${esc(h.names) || "<em>Unnamed</em>"}</h3>
-            <div class="addr">${esc(fullAddress(h))}</div>
+            <div class="addr">${esc(fullAddress(h))}${peopleCountText(h) ? ` · ${esc(peopleCountText(h))}` : ""}</div>
           </div>
           <button class="btn small" data-act="edit" data-id="${h.id}">Edit</button>
         </header>
-        <dl>
-          ${h.phone ? `<dt>Phone</dt><dd><a href="tel:${esc(h.phone)}">${esc(h.phone)}</a>${h.phone2 ? ` · <a href="tel:${esc(h.phone2)}">${esc(h.phone2)}</a>` : ""}</dd>` : ""}
-          ${h.email ? `<dt>Email</dt><dd><a href="mailto:${esc(h.email)}">${esc(h.email)}</a></dd>` : ""}
-          ${h.occupation ? `<dt>Work</dt><dd>${esc(h.occupation)}</dd>` : ""}
-          ${h.needs ? `<dt>Needs</dt><dd class="needs">${esc(h.needs)}</dd>` : ""}
-          ${membersText(h) ? `<dt>Household</dt><dd>${esc(membersText(h))}</dd>` : ""}
-          ${h.pets ? `<dt>Pets</dt><dd>${esc(h.pets)}</dd>` : ""}
-        </dl>
-        ${h.skills.length || h.resources.length ? `<div class="tags">
-          ${h.skills.map((s) => `<span class="tag">${esc(s)}</span>`).join("")}
-          ${h.resources.map((s) => `<span class="tag res">${esc(s)}</span>`).join("")}
-        </div>` : ""}
+        ${h.people.length ? `<ul class="who">
+          ${adultsOf(h).map((p) => `<li>
+            <b>${esc(personName(p, h))}</b>${p.phone ? ` · <a href="tel:${esc(p.phone)}">${esc(p.phone)}</a>` : ""}${p.email ? ` · <a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ""}${p.occupation ? ` · ${esc(p.occupation)}` : ""}
+            ${p.skills.length ? `<div class="tags">${tags(p.skills)}</div>` : ""}
+            ${p.needs ? `<div class="needs">⚠ ${esc(p.needs)}</div>` : ""}
+          </li>`).join("")}
+          ${kids.length ? `<li>${esc(childrenText(h))}
+            ${kids.filter((k) => k.needs).map((k) => `<div class="needs">⚠ ${esc(childLabel(k).replace(/^child/, "Child"))}: ${esc(k.needs)}</div>`).join("")}</li>` : ""}
+        </ul>` : ""}
+        ${h.household ? `<p class="small muted">${esc(h.household)}</p>` : ""}
+        ${h.resources.length || h.pets ? `<div class="tags">${tags(h.resources, "res")}${h.pets ? `<span class="muted small">${h.resources.length ? "· " : ""}${esc(h.pets)}</span>` : ""}</div>` : ""}
         <footer>
           ${h.consent.given
             ? `<span class="badge ok">Consented${h.consent.date ? " " + esc(fmtDate(h.consent.date)) : ""}</span>`
             : `<span class="badge warn">No consent yet. Won't be printed</span>`}
           ${h.podId ? `<span class="badge">${esc(podName(h.podId) || "Pod")}</span>` : ""}
         </footer>
-      </article>`).join("") : `<p class="muted">No households match.</p>`;
+      </article>`;
+    }).join("") : `<p class="muted">No households match.</p>`;
   }
 
   // ---------- Household editor ----------
@@ -296,9 +389,54 @@
     </div>`;
   }
 
+  function personSummary(p) {
+    const bits = p.kind === "child"
+      ? [p.age != null ? `age ${p.age}` : "", p.needs ? `⚠ ${p.needs}` : ""]
+      : [p.phone, p.occupation, p.skills.join(", "), p.needs ? `⚠ ${p.needs}` : ""];
+    return bits.filter(Boolean).join(" · ") || "No details yet";
+  }
+  const personTitle = (p) => [p.first, p.last].filter(Boolean).join(" ") || (p.kind === "child" ? "Child" : "Adult");
+  const isBlankPerson = (p) => !p.first && !p.last && !p.phone && !p.email && !p.occupation && !p.skills.length &&
+    !p.needs && !String(p.skillsOther || "").trim() && p.age == null;
+
+  // One collapsible card per person, like passengers on a ticket booking
+  function personCardHTML(p, i, badge) {
+    const f = (field, label, attrs = "", cls = "") =>
+      `<label class="${cls}">${label}<input data-p="${i}" data-f="${field}" value="${esc(p[field] ?? "")}" ${attrs}></label>`;
+    const body = p.kind === "child" ? `
+        ${f("first", 'First name <span class="hint">optional</span>')}
+        ${f("age", 'Age <span class="hint">optional</span>', 'type="number" min="0" max="17" inputmode="numeric"')}
+        ${f("needs", "Special needs / allergies", 'placeholder="e.g. severe peanut allergy, uses a wheelchair"', "wide")}`
+      : `
+        ${f("first", "First name")}
+        ${f("last", "Last name")}
+        ${f("phone", "Phone", 'type="tel"')}
+        ${f("email", "Email", 'type="email"')}
+        ${f("occupation", "Occupation", "", "wide")}
+        <div class="wide"><p class="hint">Skills they can offer in an emergency</p>
+          <div class="chips">${uniq([...SKILL_SUGGESTIONS, ...p.skills]).map((s) => `
+            <label class="chip"><input type="checkbox" data-p="${i}" data-skill="${esc(s)}" ${p.skills.includes(s) ? "checked" : ""}><span>${esc(s)}</span></label>`).join("")}
+          </div></div>
+        ${f("skillsOther", "Other skills (comma-separated)", 'placeholder="e.g. Beekeeper, Arabic"', "wide")}
+        ${f("needs", "Special needs", `placeholder="${esc(NEEDS_HINT)}"`, "wide")}`;
+    return `
+      <div class="person ${p.open ? "open" : ""}">
+        <div class="p-head" data-toggle-person="${i}" role="button" tabindex="0" aria-expanded="${p.open ? "true" : "false"}">
+          <span class="p-num ${p.kind}">${badge}</span>
+          <span class="p-sum"><strong>${esc(personTitle(p))}</strong><span>${esc(personSummary(p))}</span></span>
+          <span class="kind ${p.kind}">${p.kind}</span>
+          <button type="button" class="icon-btn" data-remove-person="${i}" aria-label="Remove ${esc(personTitle(p))}">✕</button>
+        </div>
+        <div class="p-body">${body}</div>
+      </div>`;
+  }
+
   function openEditor(id) {
     const existing = state.households.find((h) => h.id === id);
     const h = normalizeHousehold(existing || {});
+    // Working copy of the people; saved only when the form is saved
+    const draft = h.people.map((p) => ({ ...p, skills: [...p.skills], skillsOther: "", open: h.people.length === 1 }));
+    if (!existing) draft.push({ ...normalizePerson({ kind: "adult" }), skillsOther: "", open: true, auto: true });
     const dlg = $("#editor");
     dlg.innerHTML = `
       <form method="dialog" id="hh-form">
@@ -308,32 +446,28 @@
         </header>
         <div class="dlg-body">
           <fieldset>
-            <legend>Who &amp; where</legend>
-            <label class="wide">Name(s) as they should appear<input name="names" required value="${esc(h.names)}" placeholder="e.g. Maria & Tom Alvarez"></label>
+            <legend>Household</legend>
             <label>Street address<input name="address" required value="${esc(h.address)}" placeholder="112 Oak St"></label>
             <label>Unit / apt<input name="unit" value="${esc(h.unit)}"></label>
-            <label>Phone<input name="phone" type="tel" value="${esc(h.phone)}"></label>
-            <label>Second phone<input name="phone2" type="tel" value="${esc(h.phone2)}"></label>
-            <label>Email<input name="email" type="email" value="${esc(h.email)}"></label>
-            <label>Occupation(s)<input name="occupation" value="${esc(h.occupation)}"></label>
+            <label class="wide">Listing name <span class="hint">How the household appears in the directory. Leave blank to use the adults' names below.</span>
+              <input name="names" value="${esc(h.names)}"></label>
           </fieldset>
           <fieldset>
-            <legend>Skills they can offer in an emergency</legend>
-            ${chipGroup("skills", SKILL_SUGGESTIONS, h.skills)}
-            <label class="wide">Other skills (comma-separated)<input name="skillsOther" placeholder="e.g. Beekeeper, Arabic"></label>
+            <legend>People in this household</legend>
+            <div class="wide people" id="people"></div>
+            <div class="wide add-row">
+              <button type="button" class="btn small ghost" data-add-person="adult">+ Add adult</button>
+              <button type="button" class="btn small ghost" data-add-person="child">+ Add child</button>
+            </div>
+            <p class="wide hint" id="people-count"></p>
           </fieldset>
           <fieldset>
-            <legend>Equipment &amp; resources they could share</legend>
-            ${chipGroup("resources", RESOURCE_SUGGESTIONS, h.resources)}
+            <legend>Shared by the household</legend>
+            <div class="wide"><p class="hint">Equipment &amp; resources they could share</p>
+              ${chipGroup("resources", RESOURCE_SUGGESTIONS, h.resources)}</div>
             <label class="wide">Other resources (comma-separated)<input name="resourcesOther"></label>
-          </fieldset>
-          <fieldset>
-            <legend>Check-on-me info</legend>
-            <label>Adults<input name="adults" type="number" min="0" max="30" inputmode="numeric" value="${h.adults ?? ""}"></label>
-            <label>Children (under 18)<input name="children" type="number" min="0" max="30" inputmode="numeric" value="${h.children ?? ""}"></label>
-            <label class="wide">Ages &amp; other details<input name="household" value="${esc(h.household)}" placeholder="e.g. kids 4 and 7; grandmother (82) lives with us"></label>
-            <label class="wide">Special needs<textarea name="needs" rows="2" placeholder="${esc(NEEDS_HINT)}">${esc(h.needs)}</textarea></label>
-            <label class="wide">Pets<input name="pets" value="${esc(h.pets)}" placeholder="e.g. 2 dogs, 1 cat"></label>
+            <label>Pets<input name="pets" value="${esc(h.pets)}" placeholder="e.g. 2 dogs, 1 cat"></label>
+            <label>Other household details<input name="household" value="${esc(h.household)}" placeholder="e.g. spare key with #118"></label>
           </fieldset>
           <fieldset class="consent">
             <legend>Consent</legend>
@@ -342,7 +476,8 @@
             <label>Date of consent<input type="date" name="consentDate" value="${esc(h.consent.date || (existing ? "" : today()))}"></label>
             <label>Given by<input name="signedBy" value="${esc(h.consent.signedBy)}" placeholder="Who signed / said yes"></label>
             <div class="wide">
-              <p class="hint">Name and address are always printed for consenting households. Uncheck anything they <em>don't</em> want printed:</p>
+              <p class="hint">The listing name, address and adults' first names are always printed for consenting households.
+              Check what else they're OK having printed:</p>
               <div class="share-grid">
                 ${SHARE_FIELDS.map(([k, label]) => `<label class="check"><input type="checkbox" name="share_${k}" ${h.consent.share[k] ? "checked" : ""}><span>${label}</span></label>`).join("")}
               </div>
@@ -363,6 +498,64 @@
       </form>`;
 
     const form = $("#hh-form", dlg);
+    const peopleEl = $("#people", dlg);
+    const listingInput = $("input[name=names]", dlg);
+    const refreshListing = () => {
+      listingInput.placeholder = suggestListing(draft) || "e.g. The Alvarez family";
+      listingInput.setCustomValidity("");
+    };
+    const drawPeople = () => {
+      let a = 0, c = 0;
+      peopleEl.innerHTML = draft.length
+        ? draft.map((p, i) => personCardHTML(p, i, p.kind === "child" ? `C${++c}` : `${++a}`)).join("")
+        : `<p class="muted small">No one added yet.</p>`;
+      const ad = draft.filter((p) => p.kind === "adult").length, ch = draft.length - ad;
+      $("#people-count", dlg).textContent = draft.length
+        ? `${plural(draft.length, "person", "people")}: ${plural(ad, "adult", "adults")}, ${plural(ch, "child", "children")}. Counted automatically for pod headcounts.`
+        : "";
+      refreshListing();
+    };
+    // Typing updates the working copy and the card's summary line without redrawing (keeps focus)
+    const onPersonInput = (e) => {
+      const t = e.target, i = +t.dataset.p, p = draft[i];
+      if (!p) return;
+      if (t.dataset.f) p[t.dataset.f] = t.dataset.f === "age" ? toCount(t.value) : t.value;
+      if (t.dataset.skill) p.skills = t.checked ? uniq([...p.skills, t.dataset.skill]) : p.skills.filter((x) => x !== t.dataset.skill);
+      p.auto = false;
+      const card = peopleEl.children[i];
+      if (card) {
+        card.querySelector(".p-sum strong").textContent = personTitle(p);
+        card.querySelector(".p-sum span").textContent = personSummary({ ...p, skills: uniq([...p.skills, ...listOf(p.skillsOther)]) });
+      }
+      refreshListing();
+    };
+    peopleEl.addEventListener("input", onPersonInput);
+    peopleEl.addEventListener("change", onPersonInput);
+    const toggle = (head) => {
+      const p = draft[+head.dataset.togglePerson];
+      p.open = !p.open;
+      head.parentElement.classList.toggle("open", p.open);
+      head.setAttribute("aria-expanded", p.open ? "true" : "false");
+    };
+    peopleEl.addEventListener("click", (e) => {
+      const rm = e.target.closest("[data-remove-person]");
+      if (rm) { draft.splice(+rm.dataset.removePerson, 1); drawPeople(); return; }
+      const head = e.target.closest("[data-toggle-person]");
+      if (head) toggle(head);
+    });
+    peopleEl.addEventListener("keydown", (e) => {
+      const head = e.target.closest("[data-toggle-person]");
+      if (head && e.target === head && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggle(head); }
+    });
+    $$("[data-add-person]", dlg).forEach((b) => b.addEventListener("click", () => {
+      draft.forEach((p) => (p.open = false));
+      draft.push({ ...normalizePerson({ kind: b.dataset.addPerson }), skillsOther: "", open: true });
+      drawPeople();
+      peopleEl.lastElementChild?.querySelector("input")?.focus();
+    }));
+    listingInput.addEventListener("input", () => listingInput.setCustomValidity(""));
+    drawPeople();
+
     $$("[data-close]", dlg).forEach((b) => b.addEventListener("click", () => dlg.close()));
     $("[data-del]", dlg)?.addEventListener("click", () => {
       if (!confirm(`Delete ${h.names || "this household"}? This can't be undone.`)) return;
@@ -374,21 +567,23 @@
       e.preventDefault();
       const fd = new FormData(form);
       const get = (k) => (fd.get(k) || "").toString().trim();
+      const people = draft
+        .filter((p) => !(p.auto && isBlankPerson(p))) // drop the starter card if it was never filled in
+        .map((p) => normalizePerson({ ...p, skills: [...p.skills, ...listOf(p.skillsOther)] }));
+      const names = get("names") || suggestListing(people);
+      if (!names) {
+        listingInput.setCustomValidity("Add a listing name, or a first name for at least one adult.");
+        listingInput.reportValidity();
+        return;
+      }
       const updated = normalizeHousehold({
         ...h,
-        names: get("names"),
+        names,
         address: get("address"),
         unit: get("unit"),
-        phone: get("phone"),
-        phone2: get("phone2"),
-        email: get("email"),
-        occupation: get("occupation"),
+        people,
         household: get("household"),
-        adults: get("adults"),
-        children: get("children"),
-        skills: uniq([...fd.getAll("skills"), ...splitList(get("skillsOther"))]),
-        resources: uniq([...fd.getAll("resources"), ...splitList(get("resourcesOther"))]),
-        needs: get("needs"),
+        resources: uniq([...fd.getAll("resources"), ...listOf(get("resourcesOther"))]),
         pets: get("pets"),
         notes: get("notes"),
         consent: {
@@ -406,7 +601,7 @@
       toast(existing ? "Saved" : "Household added");
     });
     dlg.showModal();
-    $("input[name=names]", dlg).focus();
+    $("input[name=address]", dlg).focus();
   }
 
   // ---------- Pods ----------
@@ -433,7 +628,7 @@
         p.name = `Pod ${i + 1}` + (streets.length ? ` · ${streets.slice(0, 2).join(" / ")}` : "");
       }
       // Default captain: first member without listed special needs (organizer can change it)
-      p.captainId = (members.find((h) => !h.needs) || members[0])?.id || null;
+      p.captainId = (members.find((h) => !hasNeeds(h)) || members[0])?.id || null;
     });
     state.pods = pods;
     return count;
@@ -482,9 +677,9 @@
                 <li>
                   <div>
                     <strong>${esc(h.names)}</strong>${h.id === p.captainId ? ' <span class="badge">Captain</span>' : ""}
-                    <div class="muted small">${esc(fullAddress(h))}${h.phone ? " · " + esc(h.phone) : ""}</div>
-                    ${membersText(h) ? `<div class="small">${esc(membersText(h))}</div>` : ""}
-                    ${h.needs ? `<div class="needs small">⚠ ${esc(h.needs)}</div>` : ""}
+                    <div class="muted small">${esc(fullAddress(h))}${firstPhone(h) ? " · " + esc(firstPhone(h)) : ""}</div>
+                    ${membersLine(h) ? `<div class="small">${esc(membersLine(h))}</div>` : ""}
+                    ${needsList(h).map((n) => `<div class="needs small">⚠ ${esc(n)}</div>`).join("")}
                   </div>
                   <select data-move="${h.id}" aria-label="Move to pod">${podOptions(p.id)}</select>
                 </li>`).join("") || `<li class="muted">No members yet</li>`}
@@ -624,22 +819,28 @@
     return { parts, sort: p.sort || "address", forms: p.forms || 2 };
   }
 
-  // What may be printed about a household, honoring their share choices
+  // What may be printed about a household, honoring their share choices.
+  // Adults' first names always print with a consenting household; children's names only if they opted in.
   function printable(h) {
     const s = h.consent.share;
+    const people = h.people
+      .filter((p) => p.kind === "adult" || s.members)
+      .map((p) => ({
+        ...p,
+        first: p.kind === "child" && !s.childNames ? "" : p.first,
+        phone: s.phone ? p.phone : "",
+        email: s.email ? p.email : "",
+        occupation: s.occupation ? p.occupation : "",
+        skills: s.skills ? p.skills : [],
+        needs: s.needs ? p.needs : "",
+      }));
     return {
       ...h,
-      phone: s.phone ? h.phone : "",
-      phone2: s.phone ? h.phone2 : "",
-      email: s.email ? h.email : "",
-      occupation: s.occupation ? h.occupation : "",
-      skills: s.skills ? h.skills : [],
+      people,
       resources: s.resources ? h.resources : [],
-      needs: s.needs ? h.needs : "",
       pets: s.needs ? h.pets : "",
-      adults: s.members ? h.adults : null,
-      children: s.members ? h.children : null,
       household: s.members ? h.household : "",
+      _kidsHidden: !s.members && childrenOf(h).length > 0,
     };
   }
 
@@ -716,15 +917,20 @@
               }
             }
             const podName = state.pods.find((p) => p.id === h.podId)?.name;
+            const adults = adultsOf(h).map((p) => {
+              const bits = [p.phone, p.email, p.occupation].filter(Boolean).map(esc);
+              if (!p.first && !bits.length && !p.skills.length) return "";
+              const skills = p.skills.length ? `${bits.length ? " · " : ""}<i>${esc(p.skills.join(", "))}</i>` : "";
+              return `<div><b>${esc(personName(p, h))}</b> ${bits.join(" · ")}${skills}</div>`;
+            }).join("");
             return `${head}
             <div class="entry">
-              <div class="entry-top"><strong>${esc(h.names)}</strong><span class="dots"></span><span>${esc(h.phone)}</span></div>
-              <div>${esc(fullAddress(h))}${h.phone2 ? ` · ${esc(h.phone2)}` : ""}${h.email ? ` · ${esc(h.email)}` : ""}</div>
-              ${h.occupation ? `<div><em>${esc(h.occupation)}</em></div>` : ""}
-              ${h.skills.length ? `<div><b>Skills:</b> ${esc(h.skills.join(", "))}</div>` : ""}
+              <div class="entry-top"><strong>${esc(h.names)}</strong><span class="dots"></span><span>${esc(fullAddress(h))}</span></div>
+              ${adults}
+              ${childrenOf(h).length ? `<div>${esc(childrenText(h))}</div>` : ""}
+              ${h.household ? `<div><b>Household:</b> ${esc(h.household)}</div>` : ""}
               ${h.resources.length ? `<div><b>Has:</b> ${esc(h.resources.join(", "))}</div>` : ""}
-              ${membersText(h) ? `<div><b>Household:</b> ${esc(membersText(h))}</div>` : ""}
-              ${h.needs ? `<div class="needs">⚠ ${esc(h.needs)}</div>` : ""}
+              ${needsList(h).map((n) => `<div class="needs">⚠ ${esc(n)}</div>`).join("")}
               ${h.pets ? `<div><b>Pets:</b> ${esc(h.pets)}</div>` : ""}
               ${podName ? `<div class="small muted">${esc(podName)}</div>` : ""}
             </div>`;
@@ -734,23 +940,30 @@
     }
 
     if (P.index) {
-      const idx = (key) => {
-        const m = new Map();
-        list.forEach((h) => h[key].forEach((k) => { if (!m.has(k)) m.set(k, []); m.get(k).push(h); }));
-        return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const skillIdx = new Map(), resIdx = new Map();
+      const add = (m, k, v) => { if (!m.has(k)) m.set(k, []); m.get(k).push(v); };
+      list.forEach((h) => {
+        adultsOf(h).forEach((p) => p.skills.forEach((k) => add(skillIdx, k, { h, p })));
+        h.resources.forEach((k) => add(resIdx, k, { h }));
+      });
+      const sorted = (m) => [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+      const who = ({ h, p }) => {
+        const name = p && p.first && adultsOf(h).length > 1 ? personName(p, h) : "";
+        const phone = (p && p.phone) || firstPhone(h);
+        return `${name ? `<b>${esc(name)}</b> · ` : ""}${esc(h.names)} <span class="muted">(${esc(fullAddress(h))}${phone ? ", " + esc(phone) : ""})</span>`;
       };
-      const block = (title, entries) => `
+      const indexBlock = (title, entries) => `
         <h3>${title}</h3>
-        ${entries.length ? `<dl class="index">${entries.map(([k, hs]) => `
+        ${entries.length ? `<dl class="index">${entries.map(([k, vs]) => `
           <dt>${esc(k)}</dt>
-          <dd>${hs.map((h) => `${esc(h.names)} <span class="muted">(${esc(fullAddress(h))}${h.phone ? ", " + esc(h.phone) : ""})</span>`).join("<br>")}</dd>`).join("")}</dl>`
+          <dd>${vs.map(who).join("<br>")}</dd>`).join("")}</dl>`
         : `<p class="muted">None listed.</p>`}`;
       out.push(`
       <section class="sheet">
         <h2 class="sheet-title">Who can help: skills &amp; resources</h2>
         <div class="two-col">
-          <div>${block("Skills", idx("skills"))}</div>
-          <div>${block("Equipment &amp; resources", idx("resources"))}</div>
+          <div>${indexBlock("Skills", sorted(skillIdx))}</div>
+          <div>${indexBlock("Equipment &amp; resources", sorted(resIdx))}</div>
         </div>
       </section>`);
     }
@@ -772,9 +985,9 @@
                 ${members.map((h) => `<tr>
                   <td class="box">☐</td>
                   <td><strong>${esc(h.names)}</strong>${h.id === p.captainId ? " ★" : ""}<br><span class="small">${esc(fullAddress(h))}</span>
-                  ${membersText(h) ? `<br><span class="small">${esc(membersText(h))}</span>` : ""}
-                  ${h.needs ? `<br><span class="needs small">⚠ ${esc(h.needs)}</span>` : ""}</td>
-                  <td class="small">${esc(h.phone)}</td></tr>`).join("")}
+                  ${membersLine(h) ? `<br><span class="small">${esc(membersLine(h))}</span>` : ""}
+                  ${needsList(h).map((n) => `<br><span class="needs small">⚠ ${esc(n)}</span>`).join("")}</td>
+                  <td class="small">${esc(firstPhone(h))}</td></tr>`).join("")}
               </table>
             </div>`).join("") : `<p class="muted">Pods haven't been assigned yet.</p>`}
         </div>
@@ -811,6 +1024,7 @@
     const hood = s.name || "our neighborhood";
     const line = (label, cls = "") => `<div class="fline ${cls}"><span>${label}</span><i></i></div>`;
     const boxes = (items) => `<div class="form-checks">${items.map((x) => `<span>☐ ${esc(x)}</span>`).join("")}</div>`;
+    const rows = Array.from({ length: 6 }, () => `<tr>${"<td></td>".repeat(6)}</tr>`).join("");
     return `
       <section class="sheet form ${extraClass}">
         <div class="form-head">
@@ -823,34 +1037,36 @@
           </div>
         </div>
 
-        <h3><span class="num">1</span> Who &amp; where</h3>
+        <h3><span class="num">1</span> Your household</h3>
         <div class="form-grid">
-          ${line("Name(s) to list", "wide")}
           ${line("Street address")}${line("Unit / apt")}
-          ${line("Phone")}${line("Other phone")}
-          ${line("Email")}${line("Occupation(s)")}
+          ${line("List us as (e.g. Maria &amp; Tom Alvarez, or The Alvarez family)", "wide")}
         </div>
 
-        <h3><span class="num">2</span> Skills you could offer in an emergency</h3>
-        ${boxes(SKILL_SUGGESTIONS)}
-        ${line("Other skills / languages")}
+        <h3><span class="num">2</span> Who lives here</h3>
+        <table class="ptable">
+          <tr><th style="width:23%">Name</th><th style="width:14%">Adult or child? <span>(child's age)</span></th><th style="width:15%">Phone</th>
+            <th>Email</th><th style="width:16%">Occupation</th><th style="width:8%">Initials</th></tr>
+          ${rows}
+        </table>
+        <p class="form-note">For children, name and age are optional. Children's names are only printed if you tick "Children's names" below.</p>
 
-        <h3><span class="num">3</span> Equipment &amp; resources you could share</h3>
+        <h3><span class="num">3</span> Skills you could offer: write the <u>initials</u> of whoever has each one</h3>
+        <div class="form-checks initials">${SKILL_SUGGESTIONS.map((x) => `<span>${esc(x)}</span>`).join("")}</div>
+        ${line("Other skills / languages (with initials)")}
+
+        <h3><span class="num">4</span> Equipment &amp; resources your household could share</h3>
         ${boxes(RESOURCE_SUGGESTIONS)}
         ${line("Other")}
 
-        <h3><span class="num">4</span> Check on me: who lives here</h3>
-        <div class="form-grid three">
-          ${line("Adults (#)")}${line("Children under 18 (#)")}${line("Pets")}
-        </div>
-        ${line("Ages &amp; other details (e.g. kids 4 and 7; grandmother, 82)")}
-        ${line("Special needs (e.g. limited mobility, uses oxygen, lives alone, infant)")}
-        ${line("")}
+        <h3><span class="num">5</span> Check on us</h3>
+        ${line("Special needs or allergies (who, and what)")}
+        <div class="form-grid">${line("Pets")}${line("Other household details")}</div>
 
         <div class="consent-box">
-          <h3><span class="num">5</span> Consent</h3>
-          <p>☐ <b>Yes, list us.</b> I/we agree to have our <b>name and address</b> printed in the ${esc(hood)} Mini Yellow Pages,
-          shared only with participating neighbors, and to be placed in a check-in pod.</p>
+          <h3><span class="num">6</span> Consent</h3>
+          <p>☐ <b>Yes, list us.</b> I/we agree to have our <b>listing name, address and adults' first names</b> printed in the
+          ${esc(hood)} Mini Yellow Pages, shared only with participating neighbors, and to be placed in a check-in pod.</p>
           <p><b>Also OK to print</b> (check all that apply):</p>
           ${boxes(SHARE_FIELDS.map(([, label]) => label.replace(/ \(.*\)$/, "")))}
           <div class="form-grid three sig">${line("Signature")}${line("Printed name")}${line("Date")}</div>
@@ -983,10 +1199,12 @@
     ["podSize", "Households per pod"],
   ];
 
-  // The CSV holds everything the .json backup does: households (one row each),
-  // then labeled sections for settings, important numbers and the pod list.
+  // The CSV holds everything the .json backup does: households (one row each), then a
+  // "## People" section (one row per person, linked by listing name + address), then
+  // labeled sections for settings, important numbers and the pod list.
+  const PEOPLE_COLS = ["household", "address", "unit", "kind", "first", "last", "age", "phone", "email", "occupation", "skills", "needs"];
   function exportCSV() {
-    const cols = ["names", "address", "unit", "phone", "phone2", "email", "occupation", "adults", "children", "household", "skills", "resources", "needs", "pets", "consent", "consentDate", "signedBy", "hiddenFields", "pod", "podCaptain", "notes"];
+    const cols = ["names", "address", "unit", "resources", "pets", "household", "consent", "consentDate", "signedBy", "hiddenFields", "printChildNames", "pod", "podCaptain", "notes"];
     const cell = (v) => {
       const s = String(v ?? "");
       return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -1001,13 +1219,18 @@
       seen.add(name.toLowerCase()); podNames.set(p.id, name);
     });
     const podOf = (h) => state.pods.find((p) => p.id === h.podId);
-    const lines = [line(cols), ...state.households.slice().sort(byAddress).map((h) => line([
-      h.names, h.address, h.unit, h.phone, h.phone2, h.email, h.occupation, h.adults ?? "", h.children ?? "", h.household,
-      h.skills.join("; "), h.resources.join("; "), h.needs, h.pets,
+    const sorted = state.households.slice().sort(byAddress);
+    const lines = [line(cols), ...sorted.map((h) => line([
+      h.names, h.address, h.unit, h.resources.join("; "), h.pets, h.household,
       h.consent.given ? "yes" : "no", h.consent.date, h.consent.signedBy,
-      SHARE_FIELDS.filter(([k]) => !h.consent.share[k]).map(([k]) => k).join("; "),
+      SHARE_FIELDS.filter(([k]) => !SHARE_DEFAULT_OFF.includes(k) && !h.consent.share[k]).map(([k]) => k).join("; "),
+      h.consent.share.childNames ? "yes" : "no",
       podNames.get(h.podId) || "", podOf(h)?.captainId === h.id ? "yes" : "", h.notes,
     ]))];
+    lines.push("", "## People", line(PEOPLE_COLS),
+      ...sorted.flatMap((h) => h.people.map((p) => line([
+        h.names, h.address, h.unit, p.kind, p.first, p.last, p.age ?? "", p.phone, p.email, p.occupation, p.skills.join("; "), p.needs,
+      ]))));
     lines.push("", "## Settings", line(["setting", "value"]),
       ...CSV_SETTINGS.map(([k, label]) => line([label, state.settings[k]])));
     lines.push("", "## Important numbers", line(["label", "number"]),
@@ -1089,11 +1312,53 @@
     consentDate: ["consentdate", "dateofconsent"],
     signedBy: ["signedby", "givenby"],
     hiddenFields: ["hiddenfields", "donotprint", "dontprint"],
+    printChildNames: ["printchildnames", "childnames"],
     pod: ["pod", "podname"],
     podCaptain: ["podcaptain", "captain"],
     notes: ["notes", "organizernotes"],
   };
+  const PEOPLE_ALIASES = {
+    household: ["household", "householdname", "listing", "listingname", "names"],
+    address: ["address", "streetaddress", "street"],
+    unit: ["unit", "apt", "apartment", "suite"],
+    kind: ["kind", "type", "adultorchild", "adultchild"],
+    first: ["first", "firstname", "name"],
+    last: ["last", "lastname", "surname"],
+    age: ["age"],
+    phone: ["phone", "phonenumber", "mobile", "cell"],
+    email: ["email", "emailaddress", "e-mail"],
+    occupation: ["occupation", "job", "work"],
+    skills: ["skills", "skill"],
+    needs: ["needs", "specialneeds", "allergies"],
+  };
+  function columnsFor(header, aliases, norm) {
+    const col = {};
+    for (const [field, names] of Object.entries(aliases)) {
+      const idx = header.findIndex((h) => names.map(norm).includes(h));
+      if (idx >= 0) col[field] = idx;
+    }
+    return col;
+  }
   const keyOf = (h) => `${h.names}|${h.address}|${h.unit}`.toLowerCase().replace(/[^a-z0-9|]/g, "");
+
+  // "## People" rows grouped by household (listing name + address + unit)
+  function readPeopleSection(rows, norm) {
+    const byHousehold = new Map();
+    if (!rows || rows.length < 2) return byHousehold;
+    const col = columnsFor(rows[0].map(norm), PEOPLE_ALIASES, norm);
+    rows.slice(1).forEach((r) => {
+      const get = (f) => (col[f] === undefined ? "" : (r[col[f]] ?? "").trim());
+      const hh = { names: get("household"), address: get("address"), unit: get("unit") };
+      const key = keyOf(hh);
+      if (!byHousehold.has(key)) byHousehold.set(key, { ...hh, people: [] });
+      byHousehold.get(key).people.push(normalizePerson({
+        kind: /^(c|k)/i.test(get("kind")) ? "child" : "adult",
+        first: get("first"), last: get("last"), age: get("age"),
+        phone: get("phone"), email: get("email"), occupation: get("occupation"), skills: get("skills"), needs: get("needs"),
+      }));
+    });
+    return byHousehold;
+  }
   const truthy = (v) => /^(y|yes|true|1|x|✓|✔|consented|agreed)$/i.test(String(v).trim());
 
   function importCSVText(text) {
@@ -1112,12 +1377,7 @@
     const extras = readCSVExtras(sections, norm);
     if (rows.length < 2 && !extras) throw new Error("The spreadsheet has no data rows.");
     if (rows.length < 2) return mergeHouseholds([], "spreadsheet", extras);
-    const header = rows[0].map(norm);
-    const col = {};
-    for (const [field, aliases] of Object.entries(CSV_ALIASES)) {
-      const idx = header.findIndex((h) => aliases.map(norm).includes(h));
-      if (idx >= 0) col[field] = idx;
-    }
+    const col = columnsFor(rows[0].map(norm), CSV_ALIASES, norm);
     if (col.names === undefined && col.address === undefined) {
       throw new Error('The first row needs column headings, including at least "names" or "address".');
     }
@@ -1128,20 +1388,35 @@
         .forEach((f) => { if (get(f) !== undefined) rec[f] = get(f); });
       ["adults", "children"].forEach((f) => { if (get(f) !== undefined) rec[f] = toCount(get(f)); });
       ["skills", "resources"].forEach((f) => { if (get(f) !== undefined) rec[f] = uniq(get(f).split(/[;,]/).map((x) => x.trim()).filter(Boolean)); });
-      if (get("consent") !== undefined || get("consentDate") !== undefined || get("signedBy") !== undefined || get("hiddenFields") !== undefined) {
+      if (["consent", "consentDate", "signedBy", "hiddenFields", "printChildNames"].some((f) => get(f) !== undefined)) {
         const hidden = (get("hiddenFields") || "").toLowerCase();
+        let share;
+        if (get("hiddenFields") !== undefined) {
+          share = Object.fromEntries(SHARE_FIELDS.filter(([k]) => !SHARE_DEFAULT_OFF.includes(k))
+            .map(([k]) => [k, !hidden.includes(k.toLowerCase())]));
+        }
+        // Children's names print only with an explicit yes
+        if (get("printChildNames") !== undefined) share = { ...(share || {}), childNames: truthy(get("printChildNames")) };
         rec.consent = {
           given: get("consent") !== undefined ? truthy(get("consent")) : undefined,
           date: get("consentDate"),
           signedBy: get("signedBy"),
-          share: get("hiddenFields") !== undefined
-            ? Object.fromEntries(SHARE_FIELDS.map(([k]) => [k, !hidden.includes(k)])) : undefined,
+          share,
         };
       }
       rec._pod = get("pod");
       rec._captain = get("podCaptain");
       return rec;
     }).filter((rec) => rec.names || rec.address);
+    // People: from the "## People" section, or from older one-row-per-household columns (phone, skills, adults…)
+    const peopleBy = readPeopleSection(sections.people, norm);
+    records.forEach((rec) => {
+      const key = keyOf({ names: rec.names || "", address: rec.address || "", unit: rec.unit || "" });
+      if (peopleBy.has(key)) { rec.people = peopleBy.get(key).people; peopleBy.delete(key); }
+      else if (LEGACY_PERSON_FIELDS.some((f) => rec[f] !== undefined)) rec.people = peopleFromLegacy(rec);
+      LEGACY_PERSON_FIELDS.forEach((f) => delete rec[f]);
+    });
+    peopleBy.forEach((hh) => { if (hh.names || hh.address) records.push(hh); });
     if (!records.length && !extras) throw new Error("No rows with a name or address were found.");
     mergeHouseholds(records, "spreadsheet", extras);
   }
@@ -1205,7 +1480,7 @@
           given: consent.given ?? base.consent.given,
           date: consent.date ?? base.consent.date,
           signedBy: consent.signedBy ?? base.consent.signedBy,
-          share: consent.share ?? base.consent.share,
+          share: consent.share ? { ...base.consent.share, ...consent.share } : base.consent.share,
         };
       }
       if (_pod !== undefined) merged.podId = podFor(_pod);
@@ -1222,12 +1497,11 @@
   }
 
   function addSamples() {
-    SAMPLE_HOUSEHOLDS.forEach(([names, address, phone, email, occupation, skills, resources, needs, pets], i) => {
-      const [adults, children, household] = SAMPLE_MEMBERS[i] || [];
+    SAMPLE_HOUSEHOLDS.forEach((sample) => {
       state.households.push(normalizeHousehold({
-        names, address, phone, email, occupation, skills, resources, needs, pets, adults, children, household,
+        ...sample,
         notes: "Sample entry",
-        consent: { given: true, date: today(), signedBy: names },
+        consent: { given: true, date: today(), signedBy: sample.names },
       }));
     });
     if (!state.settings.name) state.settings.name = "Oak & Elm Neighbors";

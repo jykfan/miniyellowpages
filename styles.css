@@ -377,3 +377,47 @@ fieldset.consent { background: var(--yellow-soft); border-color: var(--yellow); 
 @media print {
   .print-only { display: block; }
 }
+
+/* ---- people within a household ---- */
+.people { display: flex; flex-direction: column; gap: .5rem; }
+.person { border: 1.5px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.person.open { border-color: var(--accent); }
+.p-head { display: flex; align-items: center; gap: .6rem; padding: .5rem .7rem; cursor: pointer; border-radius: var(--radius); }
+.p-head:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.p-num {
+  display: grid; place-items: center; width: 1.75rem; height: 1.75rem; border-radius: 50%; flex-shrink: 0;
+  background: var(--yellow); color: #1d1b16; font: 700 .78rem var(--sans);
+}
+.p-num.child { background: #dbe8fb; color: #1f4e8c; }
+.p-sum { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.p-sum strong { font-size: .98rem; }
+.p-sum span { font-size: .8rem; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kind { font: 700 .68rem var(--sans); text-transform: uppercase; letter-spacing: .05em; padding: .1rem .45rem; border-radius: 999px; background: var(--yellow-soft); }
+.kind.child { background: #dbe8fb; color: #1f4e8c; }
+.p-body { display: none; grid-template-columns: 1fr 1fr; gap: .65rem; padding: .1rem .75rem .85rem; }
+.person.open .p-body { display: grid; }
+.p-body .wide { grid-column: 1 / -1; }
+.p-body .hint, fieldset .wide > .hint { margin: 0 0 .3rem; }
+.add-row { display: flex; flex-wrap: wrap; gap: .5rem; }
+.btn.ghost { border-style: dashed; }
+@media (prefers-color-scheme: dark) {
+  .p-num.child, .kind.child { background: #1d3557; color: #cfe0ff; }
+}
+@media (max-width: 640px) { .p-body { grid-template-columns: 1fr; } }
+
+/* directory card: one line per person */
+.card .who { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.card .who li { border-top: 1px solid var(--line); padding: .45rem 0; font-size: .9rem; overflow-wrap: anywhere; }
+.card .who li:first-child { border-top: 0; padding-top: 0; }
+.card .who .tags { margin-top: .25rem; }
+.card > p.small { margin: 0; }
+
+/* paper form: people table and initials-by-skill */
+.ptable { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+.ptable th, .ptable td { border: 1px solid #777; padding: .15rem .3rem; text-align: left; vertical-align: top; }
+.ptable th { background: #f1f1f1; font-weight: 700; line-height: 1.15; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+.ptable th span { font-weight: 400; }
+.ptable td { height: 1.45rem; }
+.form-note { font-size: 8pt; color: #444; margin: .2rem 0 0; }
+.form .form-checks.initials span::before { content: "_____ "; letter-spacing: -.5px; }
+@media (max-width: 640px) { .ptable { font-size: 7.5pt; } }
