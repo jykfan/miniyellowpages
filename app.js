@@ -12,11 +12,10 @@
     ["occupation", "Occupation"],
     ["skills", "Skills"],
     ["resources", "Equipment & resources"],
-    ["members", "Children's number & ages"],
-    ["needs", "Special needs & pets (shared with pod & responders)"],
-    ["childNames", "Children's names (off unless they ask)"],
+    ["members", "Children"],
+    ["needs", "Special needs"],
+    ["pets", "Pets"],
   ];
-  const SHARE_DEFAULT_OFF = ["childNames"]; // printed only if the household opts in
 
   // ---------- utilities ----------
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -185,7 +184,9 @@
   }
 
   function normalizeHousehold(h) {
-    const share = Object.fromEntries(SHARE_FIELDS.map(([k]) => [k, !SHARE_DEFAULT_OFF.includes(k)]));
+    const saved = h.consent?.share || {};
+    // "pets" used to share one checkbox with special needs, so older data inherits that choice
+    const share = Object.fromEntries(SHARE_FIELDS.map(([k]) => [k, saved[k] ?? (k === "pets" ? saved.needs : undefined) ?? true]));
     return {
       id: h.id || uid(),
       names: h.names || "", // listing name, e.g. "Maria & Tom Alvarez"
@@ -200,7 +201,7 @@
         given: !!h.consent?.given,
         date: h.consent?.date || "",
         signedBy: h.consent?.signedBy || "",
-        share: { ...share, ...(h.consent?.share || {}) },
+        share,
       },
       podId: h.podId || null,
       updatedAt: h.updatedAt || new Date().toISOString(),
@@ -820,14 +821,14 @@
   }
 
   // What may be printed about a household, honoring their share choices.
-  // Adults' first names always print with a consenting household; children's names only if they opted in.
+  // Adults' first names always print with a consenting household. Children print as entered
+  // (name and age only if given), or not at all if the household unchecked "Children".
   function printable(h) {
     const s = h.consent.share;
     const people = h.people
       .filter((p) => p.kind === "adult" || s.members)
       .map((p) => ({
         ...p,
-        first: p.kind === "child" && !s.childNames ? "" : p.first,
         phone: s.phone ? p.phone : "",
         email: s.email ? p.email : "",
         occupation: s.occupation ? p.occupation : "",
@@ -838,8 +839,7 @@
       ...h,
       people,
       resources: s.resources ? h.resources : [],
-      pets: s.needs ? h.pets : "",
-      household: s.members ? h.household : "",
+      pets: s.pets ? h.pets : "",
       _kidsHidden: !s.members && childrenOf(h).length > 0,
     };
   }
@@ -1049,7 +1049,7 @@
             <th>Email</th><th style="width:16%">Occupation</th><th style="width:8%">Initials</th></tr>
           ${rows}
         </table>
-        <p class="form-note">For children, name and age are optional. Children's names are only printed if you tick "Children's names" below.</p>
+        <p class="form-note">For children, name and age are optional. Leave out anything you'd rather not have printed.</p>
 
         <h3><span class="num">3</span> Skills you could offer: write the <u>initials</u> of whoever has each one</h3>
         <div class="form-checks initials">${SKILL_SUGGESTIONS.map((x) => `<span>${esc(x)}</span>`).join("")}</div>
@@ -1204,7 +1204,7 @@
   // labeled sections for settings, important numbers and the pod list.
   const PEOPLE_COLS = ["household", "address", "unit", "kind", "first", "last", "age", "phone", "email", "occupation", "skills", "needs"];
   function exportCSV() {
-    const cols = ["names", "address", "unit", "resources", "pets", "household", "consent", "consentDate", "signedBy", "hiddenFields", "printChildNames", "pod", "podCaptain", "notes"];
+    const cols = ["names", "address", "unit", "resources", "pets", "household", "consent", "consentDate", "signedBy", "hiddenFields", "pod", "podCaptain", "notes"];
     const cell = (v) => {
       const s = String(v ?? "");
       return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -1223,8 +1223,7 @@
     const lines = [line(cols), ...sorted.map((h) => line([
       h.names, h.address, h.unit, h.resources.join("; "), h.pets, h.household,
       h.consent.given ? "yes" : "no", h.consent.date, h.consent.signedBy,
-      SHARE_FIELDS.filter(([k]) => !SHARE_DEFAULT_OFF.includes(k) && !h.consent.share[k]).map(([k]) => k).join("; "),
-      h.consent.share.childNames ? "yes" : "no",
+      SHARE_FIELDS.filter(([k]) => !h.consent.share[k]).map(([k]) => k).join("; "),
       podNames.get(h.podId) || "", podOf(h)?.captainId === h.id ? "yes" : "", h.notes,
     ]))];
     lines.push("", "## People", line(PEOPLE_COLS),
@@ -1312,7 +1311,6 @@
     consentDate: ["consentdate", "dateofconsent"],
     signedBy: ["signedby", "givenby"],
     hiddenFields: ["hiddenfields", "donotprint", "dontprint"],
-    printChildNames: ["printchildnames", "childnames"],
     pod: ["pod", "podname"],
     podCaptain: ["podcaptain", "captain"],
     notes: ["notes", "organizernotes"],
@@ -1388,15 +1386,10 @@
         .forEach((f) => { if (get(f) !== undefined) rec[f] = get(f); });
       ["adults", "children"].forEach((f) => { if (get(f) !== undefined) rec[f] = toCount(get(f)); });
       ["skills", "resources"].forEach((f) => { if (get(f) !== undefined) rec[f] = uniq(get(f).split(/[;,]/).map((x) => x.trim()).filter(Boolean)); });
-      if (["consent", "consentDate", "signedBy", "hiddenFields", "printChildNames"].some((f) => get(f) !== undefined)) {
+      if (["consent", "consentDate", "signedBy", "hiddenFields"].some((f) => get(f) !== undefined)) {
         const hidden = (get("hiddenFields") || "").toLowerCase();
-        let share;
-        if (get("hiddenFields") !== undefined) {
-          share = Object.fromEntries(SHARE_FIELDS.filter(([k]) => !SHARE_DEFAULT_OFF.includes(k))
-            .map(([k]) => [k, !hidden.includes(k.toLowerCase())]));
-        }
-        // Children's names print only with an explicit yes
-        if (get("printChildNames") !== undefined) share = { ...(share || {}), childNames: truthy(get("printChildNames")) };
+        const share = get("hiddenFields") !== undefined
+          ? Object.fromEntries(SHARE_FIELDS.map(([k]) => [k, !hidden.includes(k.toLowerCase())])) : undefined;
         rec.consent = {
           given: get("consent") !== undefined ? truthy(get("consent")) : undefined,
           date: get("consentDate"),
