@@ -421,3 +421,16 @@ fieldset.consent { background: var(--yellow-soft); border-color: var(--yellow); 
 .form-note { font-size: 8pt; color: #444; margin: .2rem 0 0; }
 .form .form-checks.initials span::before { content: "_____ "; letter-spacing: -.5px; }
 @media (max-width: 640px) { .ptable { font-size: 7.5pt; } }
+
+/* ---- go bag & stay kit ---- */
+.kits-note { margin: 0 0 .75rem; }
+.kit-span { font: 600 .8rem var(--sans); color: var(--ink-2); background: var(--yellow-soft); padding: .1rem .5rem; border-radius: 999px; vertical-align: middle; }
+.kit label.check small, .pcheck small { display: block; color: var(--ink-2); font-size: .82em; line-height: 1.35; }
+.src { font: 600 .68rem var(--sans); color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; padding: 0 .4rem; white-space: nowrap; }
+.kits-print .kit-print { break-inside: avoid-page; margin-bottom: .2in; }
+.kits-print h3 { margin: .3rem 0 .1rem; font-size: 1.1rem; }
+.kits-print h4 { margin: .4rem 0 .2rem; font-size: .9rem; }
+.kits-print .pcheck { margin-bottom: .25rem; font-size: 9.5pt; }
+.kits-print .src { border: 0; padding: 0; font-weight: 400; }
+.kits-print .print-gobag { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .3in; }
+@media (max-width: 640px) { .kits-print .print-gobag { grid-template-columns: 1fr; } }

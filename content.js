@@ -30,51 +30,74 @@ const DEFAULT_NUMBERS = [
   { label: "Water utility", number: "" },
 ];
 
-const GO_BAG = [
-  { group: "Water & food", items: [
-    "Water: 1 gallon per person per day, at least 3 days",
-    "3 days of non-perishable food per person",
-    "Manual can opener and utensils",
-  ]},
-  { group: "Light, power & communication", items: [
-    "Flashlight or headlamp",
-    "Battery or hand-crank NOAA weather radio",
-    "Extra batteries",
-    "Phone charger and backup battery pack",
-    "Whistle to signal for help",
-    "Printed copy of this directory and your pod list",
-  ]},
-  { group: "Health & safety", items: [
-    "First-aid kit",
-    "7-day supply of prescription medications, plus a list of them",
-    "Spare glasses or contacts",
-    "N95 / dust masks",
-    "Moist towelettes, garbage bags, plastic ties",
-    "Hygiene items (toothbrush, sanitary supplies, hand sanitizer)",
-  ]},
-  { group: "Documents & money", items: [
-    "Copies of ID, insurance policies, and medical info (paper and USB / cloud)",
-    "Cash in small bills",
-    "Written list of important phone numbers",
-    "Local paper map with your meeting places marked",
-  ]},
-  { group: "Clothing & shelter", items: [
-    "Change of clothes and sturdy closed-toe shoes",
-    "Emergency blanket or sleeping bag",
-    "Work gloves",
-    "Rain gear",
-  ]},
-  { group: "Tools", items: [
-    "Wrench or pliers (for utility shutoffs)",
-    "Multi-tool or knife",
-    "Duct tape and plastic sheeting",
-  ]},
-  { group: "Family extras", items: [
-    "Baby supplies (formula, diapers, bottles)",
-    "Pet food, water, leash or carrier, vet records",
-    "Comfort items or games for kids",
-  ]},
+/* Emergency kits, from the City of Berkeley's "Build a Disaster Go Bag and Stay Kit" page.
+   Items marked src: "ready.gov" come from Ready.gov (FEMA) recommendations that Berkeley's list doesn't cover.
+   Each item: "text", or { text, note, src }. */
+const KITS = [
+  {
+    id: "gobag",
+    title: "Go bag",
+    span: "24 hours",
+    intro: "For emergencies where you may have to evacuate quickly, from earthquakes to wildfires or a gas leak in the neighborhood. Bring only essentials to help your household through the next 24 hours.",
+    groups: [
+      { group: "Pack ahead", items: [
+        "Phone charger",
+        "Flashlight/headlamp",
+        "Local map with walking paths",
+        "Water, snacks",
+        "Important documents",
+        "First aid kit",
+        { text: "Whistle to signal for help", src: "ready.gov" },
+        { text: "Dust mask", note: "To help filter contaminated air", src: "ready.gov" },
+      ]},
+      { group: "Add on your way out", items: [
+        "Wallet",
+        "Cell phone",
+        "Keys",
+        "Medications",
+        "Backup glasses",
+      ]},
+    ],
+  },
+  {
+    id: "staykit",
+    title: "Stay kit",
+    span: "3 days (72 hours)",
+    intro: "Supplies for staying home, based on your household's needs. Keep daily needs and equipment in separate groups so you can find things quickly in an emergency.",
+    groups: [
+      { group: "Daily needs", items: [
+        { text: "Water", note: "One gallon per person, per day. Store enough for 3 days and build up from there. Buy bottled water and refresh it every couple of years, or refill food-grade containers." },
+        { text: "Prescriptions and medical equipment", note: "A 3-day dose of any medicine you take regularly." },
+        { text: "Personal hygiene and sanitation items", note: "Including moist towelettes, garbage bags and plastic ties, feminine supplies, and hand sanitizer (ready.gov)." },
+        { text: "First aid kit", note: "Plus a first aid book or other emergency reference material (ready.gov)." },
+        { text: "Personal documents", note: "Photocopy your driver's license, passport, leases, titles and contact list, and upload copies to the cloud or keep them on two backup drives. Keep paper copies, insurance policies and bank records in a waterproof container (ready.gov)." },
+        { text: "Non-perishable food", note: "At least 3 days per person. Choose foods your family will eat that need no refrigeration, cooking, water or special preparation, and remember special diets." },
+        { text: "Manual can opener and eating utensils", src: "ready.gov" },
+        { text: "Pet items", note: "Food, medications, extra water." },
+        { text: "Infant formula and diapers", src: "ready.gov" },
+        { text: "Sleeping bag or warm blanket for each person", src: "ready.gov" },
+        { text: "Complete change of clothing", note: "Long-sleeved shirt, long pants and sturdy shoes.", src: "ready.gov" },
+        { text: "Cash and change", src: "ready.gov" },
+        { text: "Paper cups, plates, disposable utensils and paper towels", src: "ready.gov" },
+        { text: "Books, games, puzzles or other activities for children", src: "ready.gov" },
+      ]},
+      { group: "Equipment", items: [
+        "Flashlight and extra batteries",
+        { text: "Basic toolkit", note: "Including utility wrenches (non-sparking) to turn off gas." },
+        { text: "Cell phone and charger", note: "A battery-operated phone charger, or one that plugs into your car, helps you stay informed, take photos and communicate." },
+        { text: "Backup power", note: "Portable battery packs, solar chargers or generators to keep phones, radios and medical equipment running during outages." },
+        { text: "Radio (battery-operated or hand crank)", note: "Ideally one that receives NOAA Weather Radio tone alerts (ready.gov). Berkeley stations: KCBS 740 AM, KQED 88.5 FM, KSOL 98.9 FM (Spanish)." },
+        { text: "Fire extinguisher (ABC-rated)", note: "To quickly control small fires. Get it serviced annually, or at least every couple of years." },
+        { text: "Whistle to signal for help", src: "ready.gov" },
+        { text: "Dust mask, plastic sheeting and duct tape", note: "To filter contaminated air and shelter in place.", src: "ready.gov" },
+        { text: "Matches in a waterproof container", src: "ready.gov" },
+        { text: "Paper and pencil", src: "ready.gov" },
+      ]},
+    ],
+    outro: "As your capacity and budget allow, add to your stay kit. Work together with your neighbors to store collective supplies.",
+  },
 ];
+const KITS_SOURCE = "Based on City of Berkeley guidance, with additions from Ready.gov (FEMA).";
 
 /* Each guide: id, title, summary, and sections of {heading, steps|text, warn}. */
 const GUIDES = [
@@ -139,6 +162,39 @@ const GUIDES = [
         "Only run generators outdoors, at least 20 feet from doors, windows, and vents. Carbon monoxide kills quickly and has no smell.",
         "Never plug a generator into a wall outlet (backfeeding). It can electrocute utility workers. Use heavy-duty extension cords or a professionally installed transfer switch.",
         "Install battery-powered CO alarms inside.",
+      ]},
+    ],
+  },
+  {
+    id: "food",
+    title: "Food when the power is out",
+    summary: "Power outages can last several days. Stock food that needs no refrigeration, cooking, water or special preparation. (From Ready.gov)",
+    sections: [
+      { heading: "Good foods to keep on hand", steps: [
+        "Ready-to-eat canned meats, fruits and vegetables, plus a manual can opener",
+        "Protein or fruit bars, dry cereal or granola, peanut butter, dried fruit",
+        "Canned juices and non-perishable pasteurized milk",
+        "High-energy foods, food for infants, and comfort/stress foods",
+        "Choose foods your family will eat, and remember any special dietary needs.",
+      ]},
+      { heading: "Keeping food safe without power", steps: [
+        "Keep the refrigerator and freezer doors closed as much as possible.",
+        "An unopened refrigerator keeps food cold for about 4 hours. Food should stay at 40°F or below; use a refrigerator thermometer to check.",
+        "Thawed food can usually be eaten if it's still \"refrigerator cold,\" and re-frozen if it still has ice crystals.",
+        "Keep food in covered containers and keep cooking and eating utensils clean.",
+        "Don't let garbage build up inside, for fire and sanitation reasons.",
+      ]},
+      { heading: "When in doubt, throw it out", warn: true, steps: [
+        "Perishable food (meat, poultry, fish, eggs, leftovers) that has been above 40°F for 2 hours or more.",
+        "Any food that has been at room temperature for 2 hours or more.",
+        "Any food that touched flood water, or has an unusual odor, color or texture.",
+        "Cans that are swollen, dented or corroded, even if the food looks safe.",
+        "For babies, use ready-to-feed formula. If you must mix formula, use bottled water, or boiled water as a last resort.",
+      ]},
+      { heading: "Cooking", steps: [
+        "Commercially canned food can be eaten straight from the can.",
+        "Indoors, you can use candle warmers, chafing dishes, fondue pots or a fireplace. Charcoal grills and camp stoves are for outdoor use only.",
+        "To heat food in its can: remove the label, wash and disinfect the can (1 part bleach to 10 parts water), and open it before heating.",
       ]},
     ],
   },

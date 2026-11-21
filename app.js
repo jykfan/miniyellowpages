@@ -4,7 +4,7 @@
   "use strict";
 
   const STORE_KEY = "myp:data:v1";
-  const GOBAG_KEY = "myp:gobag:v1";
+  const KITS_KEY = "myp:kits:v1"; // which go bag / stay kit items are packed (this device only)
   const PRINT_KEY = "myp:print:v1";
   const SHARE_FIELDS = [
     ["phone", "Phone"],
@@ -721,7 +721,35 @@
   }
 
   // ---------- Prepare ----------
-  function loadGobag() { try { return JSON.parse(safeGet(GOBAG_KEY) || "{}"); } catch { return {}; } }
+  function loadKitChecks() { try { return JSON.parse(safeGet(KITS_KEY) || "{}"); } catch { return {}; } }
+  const kitItem = (it) => (typeof it === "string" ? { text: it } : it);
+  const kitTotal = (kit) => kit.groups.reduce((n, g) => n + g.items.length, 0);
+  const kitDone = (kit, checks) => Object.keys(checks).filter((k) => k.startsWith(kit.id + ":") && checks[k]).length;
+
+  // Interactive checklist for one kit (Prepare tab)
+  function kitHTML(kit, checks) {
+    const total = kitTotal(kit), done = kitDone(kit, checks);
+    return `
+      <article class="guide kit" id="${kit.id}">
+        <h2>${esc(kit.title)} <span class="kit-span">${esc(kit.span)}</span></h2>
+        <p class="lead">${esc(kit.intro)}</p>
+        <div class="progress" aria-label="${esc(kit.title)} progress"><span style="width:${total ? (done / total) * 100 : 0}%"></span></div>
+        <p class="muted small" data-kit-count="${kit.id}">${done} of ${total} packed</p>
+        <div class="gobag">
+          ${kit.groups.map((g, gi) => `
+            <div>
+              <h3>${esc(g.group)}</h3>
+              ${g.items.map((raw, ii) => {
+                const it = kitItem(raw), key = `${kit.id}:${gi}.${ii}`;
+                return `<label class="check"><input type="checkbox" data-kit="${kit.id}" data-kit-item="${key}" ${checks[key] ? "checked" : ""}>
+                  <span>${esc(it.text)}${it.src ? ` <span class="src">${esc(it.src)}</span>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}</span></label>`;
+              }).join("")}
+            </div>`).join("")}
+        </div>
+        ${kit.outro ? `<p class="small">${esc(kit.outro)}</p>` : ""}
+        <p><button class="btn small" data-act="reset-kit" data-kit="${kit.id}">Clear checklist</button></p>
+      </article>`;
+  }
 
   function guideHTML(g) {
     return `
@@ -749,9 +777,7 @@
   }
 
   function renderPrepare() {
-    const checks = loadGobag();
-    const total = GO_BAG.reduce((n, g) => n + g.items.length, 0);
-    const done = Object.values(checks).filter(Boolean).length;
+    const checks = loadKitChecks();
     $("#view").innerHTML = `
       <section class="page-head">
         <div>
@@ -761,7 +787,7 @@
       </section>
       <nav class="guide-nav">
         <a href="#/prepare" data-jump="numbers">Important numbers</a>
-        <a href="#/prepare" data-jump="gobag">Go bag</a>
+        ${KITS.map((k) => `<a href="#/prepare" data-jump="${k.id}">${esc(k.title)}</a>`).join("")}
         ${GUIDES.map((g) => `<a href="#/prepare" data-jump="guide-${g.id}">${esc(g.title)}</a>`).join("")}
       </nav>
       <article class="guide" id="numbers">
@@ -769,36 +795,22 @@
         ${numbersHTML()}
         <p class="muted small">Fill in your local utility numbers and meeting point under <a href="#/settings">Settings</a>.</p>
       </article>
-      <article class="guide" id="gobag">
-        <h2>Pack a go bag</h2>
-        <p class="lead">One bag per person, ready to grab in 5 minutes. Check items off as you pack them (saved on this device).</p>
-        <div class="progress" aria-label="Go bag progress"><span style="width:${total ? (done / total) * 100 : 0}%"></span></div>
-        <p class="muted small" id="gobag-count">${done} of ${total} packed</p>
-        <div class="gobag">
-          ${GO_BAG.map((g, gi) => `
-            <div>
-              <h3>${esc(g.group)}</h3>
-              ${g.items.map((it, ii) => {
-                const key = `${gi}.${ii}`;
-                return `<label class="check"><input type="checkbox" data-gobag="${key}" ${checks[key] ? "checked" : ""}><span>${esc(it)}</span></label>`;
-              }).join("")}
-            </div>`).join("")}
-        </div>
-        <p><button class="btn small" data-act="reset-gobag">Clear checklist</button></p>
-      </article>
+      <p class="muted small kits-note">Be ready to go or stay. Check items off as you pack them (saved on this device). ${esc(KITS_SOURCE)}</p>
+      ${KITS.map((k) => kitHTML(k, checks)).join("")}
       ${GUIDES.map(guideHTML).join("")}
     `;
     $$("[data-jump]").forEach((a) => a.addEventListener("click", (e) => {
       e.preventDefault();
       document.getElementById(a.dataset.jump)?.scrollIntoView({ behavior: "smooth" });
     }));
-    $$("[data-gobag]").forEach((cb) => cb.addEventListener("change", () => {
-      const c = loadGobag();
-      c[cb.dataset.gobag] = cb.checked;
-      safeSet(GOBAG_KEY, JSON.stringify(c));
-      const n = Object.values(c).filter(Boolean).length;
-      $("#gobag-count").textContent = `${n} of ${total} packed`;
-      $(".progress span").style.width = `${(n / total) * 100}%`;
+    $$("[data-kit-item]").forEach((cb) => cb.addEventListener("change", () => {
+      const c = loadKitChecks();
+      c[cb.dataset.kitItem] = cb.checked;
+      safeSet(KITS_KEY, JSON.stringify(c));
+      const kit = KITS.find((k) => k.id === cb.dataset.kit);
+      const n = kitDone(kit, c), total = kitTotal(kit);
+      $(`[data-kit-count="${kit.id}"]`).textContent = `${n} of ${total} packed`;
+      $(`#${kit.id} .progress span`).style.width = `${(n / total) * 100}%`;
     }));
   }
 
@@ -809,7 +821,7 @@
     ["index", "Skills & resources index", true],
     ["pods", "Pod assignments", true],
     ["guides", "Emergency guides", true],
-    ["gobag", "Go-bag checklist", true],
+    ["gobag", "Go bag & stay kit checklists", true],
     ["signs", "OK / HELP window signs", false],
     ["forms", "Blank sign-up & consent forms", false],
   ];
@@ -998,12 +1010,21 @@
     if (P.guides) out.push(`<section class="sheet guides-print"><h2 class="sheet-title">Emergency guides</h2>${GUIDES.map(guideHTML).join("")}</section>`);
 
     if (P.gobag) out.push(`
-      <section class="sheet">
-        <h2 class="sheet-title">Go-bag checklist</h2>
-        <p>One bag per person, ready to grab in 5 minutes. Check it every 6 months and rotate food, water, and medications.</p>
-        <div class="gobag print-gobag">
-          ${GO_BAG.map((g) => `<div><h3>${esc(g.group)}</h3>${g.items.map((it) => `<div class="pcheck">☐ ${esc(it)}</div>`).join("")}</div>`).join("")}
-        </div>
+      <section class="sheet kits-print">
+        <h2 class="sheet-title">Go bag &amp; stay kit</h2>
+        <p class="small">Be ready to go or stay. ${esc(KITS_SOURCE)}</p>
+        ${KITS.map((kit) => `
+          <div class="kit-print">
+            <h3>${esc(kit.title)} <span class="kit-span">${esc(kit.span)}</span></h3>
+            <p class="small">${esc(kit.intro)}</p>
+            <div class="print-gobag">
+              ${kit.groups.map((g) => `<div><h4>${esc(g.group)}</h4>${g.items.map((raw) => {
+                const it = kitItem(raw);
+                return `<div class="pcheck">☐ ${esc(it.text)}${it.src ? ` <span class="src">(${esc(it.src)})</span>` : ""}${it.note ? `<small>${esc(it.note)}</small>` : ""}</div>`;
+              }).join("")}</div>`).join("")}
+            </div>
+            ${kit.outro ? `<p class="small">${esc(kit.outro)}</p>` : ""}
+          </div>`).join("")}
       </section>`);
 
     if (P.signs) out.push(`
@@ -1522,7 +1543,11 @@
         state.pods = state.pods.filter((p) => p.id !== id);
         save(); renderPods(); break;
       }
-      case "reset-gobag": safeSet(GOBAG_KEY, "{}"); renderPrepare(); break;
+      case "reset-kit": {
+        const c = loadKitChecks();
+        Object.keys(c).forEach((k) => { if (k.startsWith(b.dataset.kit + ":")) delete c[k]; });
+        safeSet(KITS_KEY, JSON.stringify(c)); renderPrepare(); break;
+      }
       case "print": window.print(); break;
       case "export-json": exportJSON(); break;
       case "export-csv": exportCSV(); break;
