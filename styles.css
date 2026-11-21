@@ -439,3 +439,11 @@ fieldset.consent { background: var(--yellow-soft); border-color: var(--yellow); 
 .numbers td.wrap { white-space: normal; }
 .radio-field { margin: .5rem 0 1rem; max-width: 640px; }
 .radio-field .hint { margin: 0; }
+
+/* out-of-area contacts fill-in page */
+.contacts-table { font-size: 9.5pt; margin: .5rem 0 .4rem; }
+.contacts-table td { height: .5in; }
+@media (max-width: 640px) {
+  .contacts-table { table-layout: fixed; font-size: 7.5pt; }
+  .contacts-table th { overflow-wrap: anywhere; hyphens: auto; }
+}
