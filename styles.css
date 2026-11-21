@@ -440,10 +440,9 @@ fieldset.consent { background: var(--yellow-soft); border-color: var(--yellow); 
 .radio-field { margin: .5rem 0 1rem; max-width: 640px; }
 .radio-field .hint { margin: 0; }
 
-/* out-of-area contacts fill-in page */
-.contacts-table { font-size: 9.5pt; margin: .5rem 0 .4rem; }
-.contacts-table td { height: .5in; }
-@media (max-width: 640px) {
-  .contacts-table { table-layout: fixed; font-size: 7.5pt; }
-  .contacts-table th { overflow-wrap: anywhere; hyphens: auto; }
-}
+/* out-of-area contacts: address-book page */
+.abook { display: grid; grid-template-columns: 1fr 1fr; gap: .14in .3in; margin-top: .15in; }
+.abook-entry { border: 1px solid #999; border-radius: 6px; padding: .02in .14in .1in; break-inside: avoid; }
+.abook .fline { height: .34in; }
+.abook .fline span { font-size: 9pt; color: #444; }
+@media (max-width: 640px) { .abook { grid-template-columns: 1fr; } }

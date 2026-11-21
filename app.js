@@ -927,20 +927,18 @@
         ${s.organizer ? `To update or remove your listing, contact ${esc(s.organizer)}${s.organizerContact ? ` (${esc(s.organizerContact)})` : ""}.` : ""}</p>
       </section>`);
 
-    // Blank page for each household to fill in after the booklet is printed
-    if (P.contacts) out.push(`
+    // Blank address-book page for each household to fill in after the booklet is printed
+    if (P.contacts) {
+      const line = (label) => `<div class="fline"><span>${label}</span><i></i></div>`;
+      const entry = `<div class="abook-entry">${line("Name")}${line("Phone")}${line("Email")}${line("Address")}${line("")}</div>`;
+      out.push(`
       <section class="sheet contacts-sheet">
         <h2 class="sheet-title">Our out-of-area contacts</h2>
-        <p>Choose someone <b>outside the area</b> whom everyone in your household will call or text to check in after a disaster.
-        Long-distance calls often work when local ones don't, and text messages often get through when calls fail.
-        Make sure everyone knows who to contact, and keep a copy in your go bag.</p>
-        <table class="ptable contacts-table">
-          <tr><th style="width:20%">Household member</th><th style="width:20%">Out-of-area contact</th><th style="width:13%">Relationship</th>
-            <th style="width:14%">City / state</th><th style="width:15%">Phone</th><th>Email</th></tr>
-          ${Array.from({ length: 8 }, () => `<tr>${"<td></td>".repeat(6)}</tr>`).join("")}
-        </table>
-        <p class="small muted">After a disaster: once you're safe, call or text your contact. Tell them who you're with and where you're going.</p>
+        <p>People outside the area to call or text after a disaster, such as grandparents, a close friend, or a nanny.
+        Long-distance calls often work when local ones don't, and text messages often get through when calls fail.</p>
+        <div class="abook">${entry.repeat(8)}</div>
       </section>`);
+    }
 
     if (P.directory) {
       let lastStreet = null;
