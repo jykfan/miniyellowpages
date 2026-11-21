@@ -22,8 +22,6 @@ const NEEDS_HINT =
 
 const DEFAULT_NUMBERS = [
   { label: "Emergency (police / fire / medical)", number: "911" },
-  { label: "Poison Control", number: "1-800-222-1222" },
-  { label: "988 Suicide & Crisis Lifeline", number: "988" },
   { label: "Police non-emergency", number: "" },
   { label: "Gas utility (leaks)", number: "" },
   { label: "Electric utility (outages)", number: "" },

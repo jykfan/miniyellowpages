@@ -224,6 +224,9 @@
     s.settings = { ...base.settings, ...(data.settings || {}) };
     delete s.settings.formReturn; // removed setting (sign-up form return instructions)
     if (!Array.isArray(s.settings.numbers)) s.settings.numbers = base.settings.numbers;
+    // Former defaults that aren't about emergency prep; removed only if left exactly as shipped
+    const retired = ["Poison Control|1-800-222-1222", "988 Suicide & Crisis Lifeline|988"];
+    s.settings.numbers = s.settings.numbers.filter((n) => !retired.includes(`${n.label}|${n.number}`));
     s.households = (data.households || []).map(normalizeHousehold);
     s.pods = (data.pods || []).map((p) => ({ id: p.id || uid(), name: p.name || "", captainId: p.captainId || null }));
     // drop dangling pod references
