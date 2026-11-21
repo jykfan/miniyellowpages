@@ -836,7 +836,7 @@
     ["pods", "Pod assignments", true],
     ["guides", "Emergency guides", true],
     ["gobag", "Go bag & stay kit checklists", true],
-    ["signs", "OK / HELP window signs", false],
+    ["signs", "OK / HELP window signs", true],
     ["forms", "Blank sign-up & consent forms", false],
   ];
   function loadPrintPrefs() {
