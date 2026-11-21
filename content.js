@@ -84,7 +84,7 @@ const KITS = [
         { text: "Basic toolkit", note: "Including utility wrenches (non-sparking) to turn off gas." },
         { text: "Cell phone and charger", note: "A battery-operated phone charger, or one that plugs into your car, helps you stay informed, take photos and communicate." },
         { text: "Backup power", note: "Portable battery packs, solar chargers or generators to keep phones, radios and medical equipment running during outages." },
-        { text: "Radio (battery-operated or hand crank)", note: "Ideally one that receives NOAA Weather Radio tone alerts (ready.gov). Berkeley stations: KCBS 740 AM, KQED 88.5 FM, KSOL 98.9 FM (Spanish)." },
+        { text: "Radio (battery-operated or hand crank)", note: "Ideally one that receives NOAA Weather Radio tone alerts (ready.gov).", radio: true },
         { text: "Fire extinguisher (ABC-rated)", note: "To quickly control small fires. Get it serviced annually, or at least every couple of years." },
         { text: "Whistle to signal for help", src: "ready.gov" },
         { text: "Dust mask, plastic sheeting and duct tape", note: "To filter contaminated air and shelter in place.", src: "ready.gov" },

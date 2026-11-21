@@ -434,3 +434,8 @@ fieldset.consent { background: var(--yellow-soft); border-color: var(--yellow); 
 .kits-print .src { border: 0; padding: 0; font-weight: 400; }
 .kits-print .print-gobag { display: grid; grid-template-columns: 1fr 1fr; gap: 0 .3in; }
 @media (max-width: 640px) { .kits-print .print-gobag { grid-template-columns: 1fr; } }
+
+/* emergency radio stations */
+.numbers td.wrap { white-space: normal; }
+.radio-field { margin: .5rem 0 1rem; max-width: 640px; }
+.radio-field .hint { margin: 0; }

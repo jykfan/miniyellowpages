@@ -26,7 +26,7 @@ It's a static site with no build step and no dependencies:
 
 ## Suggested workflow
 
-1. **Settings**: Enter your neighborhood name, organizer contact, meeting point, and local utility numbers.
+1. **Settings**: Enter your neighborhood name, organizer contact, meeting point, local utility numbers, and emergency radio stations.
 2. **Directory → Print sign-up forms**: Set how many copies you need, print, and drop one at each door. Each form is a single page, laid out in the same order as the Add household screen. It has a "Who lives here" table with one row per person, and people write their initials next to each skill they have, with a consent section and an "Entered" checkbox to track data entry.
 3. **Directory → + Add household**: Enter each form and tick the consent box.
 4. **Pods → Auto-assign by address**: Then adjust and pick captains.

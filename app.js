@@ -175,6 +175,7 @@
         organizer: "",
         organizerContact: "",
         meetingPoint: "",
+        radio: "", // local emergency radio stations, e.g. "KCBS 740 AM, KQED 88.5 FM"
         podSize: 5,
         numbers: DEFAULT_NUMBERS.map((n) => ({ ...n })),
       },
@@ -725,7 +726,15 @@
 
   // ---------- Prepare ----------
   function loadKitChecks() { try { return JSON.parse(safeGet(KITS_KEY) || "{}"); } catch { return {}; } }
-  const kitItem = (it) => (typeof it === "string" ? { text: it } : it);
+  // The radio item points to the stations saved in Settings, or says to find them
+  const kitItem = (raw) => {
+    const it = typeof raw === "string" ? { text: raw } : raw;
+    if (!it.radio) return it;
+    const r = state.settings.radio;
+    const local = r ? `Your local emergency stations: ${r}.`
+      : "Write down your local emergency stations (see Important numbers). If none are listed, scan AM and FM for official updates.";
+    return { ...it, note: [it.note, local].filter(Boolean).join(" ") };
+  };
   const kitTotal = (kit) => kit.groups.reduce((n, g) => n + g.items.length, 0);
   const kitDone = (kit, checks) => Object.keys(checks).filter((k) => k.startsWith(kit.id + ":") && checks[k]).length;
 
@@ -776,6 +785,7 @@
         ${nums.map((n) => `<tr><th>${esc(n.label)}</th><td>${esc(n.number)}</td></tr>`).join("")}
         ${s.organizer ? `<tr><th>Neighborhood organizer: ${esc(s.organizer)}</th><td>${esc(s.organizerContact)}</td></tr>` : ""}
         ${s.meetingPoint ? `<tr><th>Neighborhood meeting point</th><td>${esc(s.meetingPoint)}</td></tr>` : ""}
+        ${s.radio ? `<tr><th>Emergency radio stations</th><td class="wrap">${esc(s.radio)}</td></tr>` : ""}
       </table>`;
   }
 
@@ -796,7 +806,7 @@
       <article class="guide" id="numbers">
         <h2>Important numbers</h2>
         ${numbersHTML()}
-        <p class="muted small">Fill in your local utility numbers and meeting point under <a href="#/settings">Settings</a>.</p>
+        <p class="muted small">Fill in your local utility numbers, meeting point and emergency radio stations under <a href="#/settings">Settings</a>.</p>
       </article>
       <p class="muted small kits-note">Be ready to go or stay. Check items off as you pack them (saved on this device). ${esc(KITS_SOURCE)}</p>
       ${KITS.map((k) => kitHTML(k, checks)).join("")}
@@ -1153,6 +1163,9 @@
         </div>
         <h2>Important numbers</h2>
         <p class="muted small">Printed on the booklet cover. Leave a number blank to hide that line.</p>
+        <label class="radio-field">Emergency radio stations
+          <input name="radio" value="${esc(s.radio)}" placeholder="e.g. KCBS 740 AM, KQED 88.5 FM, KSOL 98.9 FM (Spanish)">
+          <span class="hint">Stations that carry official emergency updates in your area. Shown with the important numbers and in the stay kit.</span></label>
         <div id="numbers">
           ${s.numbers.map((n, i) => `
             <div class="num-row">
@@ -1186,7 +1199,7 @@
     const form = $("#settings-form");
     const collect = () => {
       const fd = new FormData(form);
-      ["name", "meetingPoint", "organizer", "organizerContact"].forEach((k) => (s[k] = (fd.get(k) || "").toString().trim()));
+      ["name", "meetingPoint", "radio", "organizer", "organizerContact"].forEach((k) => (s[k] = (fd.get(k) || "").toString().trim()));
       s.numbers = s.numbers.map((_, i) => ({ label: (fd.get("nl" + i) || "").toString().trim(), number: (fd.get("nn" + i) || "").toString().trim() }));
     };
     form.addEventListener("submit", (e) => { e.preventDefault(); collect(); save(); render(); toast("Settings saved"); });
@@ -1221,6 +1234,7 @@
     ["organizer", "Organizer"],
     ["organizerContact", "Organizer contact"],
     ["podSize", "Households per pod"],
+    ["radio", "Emergency radio stations"],
   ];
 
   // The CSV holds everything the .json backup does: households (one row each), then a
